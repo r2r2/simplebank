@@ -7,22 +7,24 @@ package db
 
 import (
 	"context"
-	"database/sql"
 )
 
-const createEntrie = `-- name: CreateEntrie :one
-INSERT INTO entries (account_id, amount)
-VALUES ($1, $2)
-RETURNING id, account_id, amount, created_at
+const createEntry = `-- name: CreateEntry :one
+INSERT INTO entries (
+    account_id,
+    amount
+) VALUES (
+             $1, $2
+         ) RETURNING id, account_id, amount, created_at
 `
 
-type CreateEntrieParams struct {
-	AccountID int64         `json:"account_id"`
-	Amount    sql.NullInt64 `json:"amount"`
+type CreateEntryParams struct {
+	AccountID int64 `json:"account_id"`
+	Amount    int64 `json:"amount"`
 }
 
-func (q *Queries) CreateEntrie(ctx context.Context, arg CreateEntrieParams) (Entry, error) {
-	row := q.db.QueryRowContext(ctx, createEntrie, arg.AccountID, arg.Amount)
+func (q *Queries) CreateEntry(ctx context.Context, arg CreateEntryParams) (Entry, error) {
+	row := q.db.QueryRowContext(ctx, createEntry, arg.AccountID, arg.Amount)
 	var i Entry
 	err := row.Scan(
 		&i.ID,
@@ -33,26 +35,13 @@ func (q *Queries) CreateEntrie(ctx context.Context, arg CreateEntrieParams) (Ent
 	return i, err
 }
 
-const deleteEntrie = `-- name: DeleteEntrie :exec
-DELETE
-FROM entries
-WHERE id = $1
+const getEntry = `-- name: GetEntry :one
+SELECT id, account_id, amount, created_at FROM entries
+WHERE id = $1 LIMIT 1
 `
 
-func (q *Queries) DeleteEntrie(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, deleteEntrie, id)
-	return err
-}
-
-const getEntrie = `-- name: GetEntrie :one
-SELECT id, account_id, amount, created_at
-FROM entries
-WHERE id = $1
-LIMIT 1
-`
-
-func (q *Queries) GetEntrie(ctx context.Context, id int64) (Entry, error) {
-	row := q.db.QueryRowContext(ctx, getEntrie, id)
+func (q *Queries) GetEntry(ctx context.Context, id int64) (Entry, error) {
+	row := q.db.QueryRowContext(ctx, getEntry, id)
 	var i Entry
 	err := row.Scan(
 		&i.ID,
@@ -64,19 +53,21 @@ func (q *Queries) GetEntrie(ctx context.Context, id int64) (Entry, error) {
 }
 
 const listEntries = `-- name: ListEntries :many
-SELECT id, account_id, amount, created_at
-FROM entries
+SELECT id, account_id, amount, created_at FROM entries
+WHERE account_id = $1
 ORDER BY id
-LIMIT $1 OFFSET $2
+LIMIT $2
+    OFFSET $3
 `
 
 type ListEntriesParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	AccountID int64 `json:"account_id"`
+	Limit     int32 `json:"limit"`
+	Offset    int32 `json:"offset"`
 }
 
 func (q *Queries) ListEntries(ctx context.Context, arg ListEntriesParams) ([]Entry, error) {
-	rows, err := q.db.QueryContext(ctx, listEntries, arg.Limit, arg.Offset)
+	rows, err := q.db.QueryContext(ctx, listEntries, arg.AccountID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -101,28 +92,4 @@ func (q *Queries) ListEntries(ctx context.Context, arg ListEntriesParams) ([]Ent
 		return nil, err
 	}
 	return items, nil
-}
-
-const updateEntrie = `-- name: UpdateEntrie :one
-UPDATE entries
-set amount = $2
-WHERE id = $1
-RETURNING id, account_id, amount, created_at
-`
-
-type UpdateEntrieParams struct {
-	ID     int64         `json:"id"`
-	Amount sql.NullInt64 `json:"amount"`
-}
-
-func (q *Queries) UpdateEntrie(ctx context.Context, arg UpdateEntrieParams) (Entry, error) {
-	row := q.db.QueryRowContext(ctx, updateEntrie, arg.ID, arg.Amount)
-	var i Entry
-	err := row.Scan(
-		&i.ID,
-		&i.AccountID,
-		&i.Amount,
-		&i.CreatedAt,
-	)
-	return i, err
 }
